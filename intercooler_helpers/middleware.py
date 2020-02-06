@@ -1,89 +1,36 @@
-# -*- coding: utf-8 -*-
-from __future__ import absolute_import, unicode_literals
-
-from collections import namedtuple
+from types import MethodType
+from typing import Optional, Callable
 from contextlib import contextmanager
+from dataclasses import dataclass
+from urllib.parse import urlparse
 
-from django.http import QueryDict, HttpResponse
-
-try:
-    from django.urls import Resolver404, resolve
-except ImportError:  # Django <1.10
-    from django.core.urlresolvers import Resolver404, resolve
+from django.http import QueryDict, HttpResponse, HttpRequest
+from django.urls import Resolver404, resolve, ResolverMatch
 from django.utils.functional import SimpleLazyObject
-from django.utils.six.moves.urllib.parse import urlparse
-
-try:
-    from django.utils.deprecation import MiddlewareMixin
-except ImportError:  # < Django 1.10
-
-    class MiddlewareMixin(object):
-        pass
 
 
-__all__ = ["IntercoolerData", "HttpMethodOverride"]
+__all__ = ["IntercoolerData", "IntercoolerRedirector"]
 
 
-class HttpMethodOverride(MiddlewareMixin):
-    """
-    Support for X-HTTP-Method-Override and _method=PUT style request method
-    changing.
-
-    Note: if https://pypi.python.org/pypi/django-method-override gets updated
-    with support for newer Django (ie: implements MiddlewareMixin), without
-    dropping older versions, I could possibly replace this with that.
-    """
-
-    def process_request(self, request):
-        request.changed_method = False
-        if request.method != "POST":
-            return
-        methods = {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
-        potentials = (
-            (request.META, "HTTP_X_HTTP_METHOD_OVERRIDE"),
-            (request.GET, "_method"),
-            (request.POST, "_method"),
-        )
-        for querydict, key in potentials:
-            if key in querydict and querydict[key].upper() in methods:
-                newmethod = querydict[key].upper()
-                # Don't change the method data if the calling method was
-                # the same as the indended method.
-                if newmethod == request.method:
-                    return
-                request.original_method = request.method
-                if hasattr(querydict, "_mutable"):
-                    with _mutate_querydict(querydict):
-                        querydict.pop(key)
-                if not hasattr(request, newmethod):
-                    setattr(request, newmethod, request.POST)
-                request.method = newmethod
-                request.changed_method = True
-                return
+# NOTE - HttpMethodOverride support for older browers removed
+# can be replaced with https://pypi.python.org/pypi/django-method-override
 
 
-def _maybe_intercooler(self):
-    return self.META.get("HTTP_X_IC_REQUEST") == "true"
+@dataclass(frozen=True)
+class NameId:
+    name: Optional[str]
+    id: Optional[str]
 
 
-def _is_intercooler(self):
-    return self.is_ajax() and self.maybe_intercooler()
-
-
-@contextmanager
-def _mutate_querydict(qd):
-    qd._mutable = True
-    yield qd
-    qd._mutable = False
-
-
-NameId = namedtuple("NameId", "name id")
-UrlMatch = namedtuple("UrlMatch", "url match")
+@dataclass(frozen=True)
+class UrlMatch:
+    url: Optional[str]
+    match: Optional[ResolverMatch]
 
 
 class IntercoolerQueryDict(QueryDict):
     @property
-    def url(self):
+    def url(self) -> UrlMatch:
         url = self.get("ic-current-url", None)
         match = None
         if url is not None:
@@ -99,28 +46,28 @@ class IntercoolerQueryDict(QueryDict):
     current_url = url
 
     @property
-    def element(self):
+    def element(self) -> NameId:
         return NameId(self.get("ic-element-name", None), self.get("ic-element-id", None))
 
     @property
-    def id(self):
+    def id(self) -> int:
         # I know IC calls it a UUID internally, buts its just 1, incrementing.
         return int(self.get("ic-id", "0"))
 
     @property
-    def request(self):
+    def request(self) -> bool:
         return bool(self.get("ic-request", None))
 
     @property
-    def target_id(self):
+    def target_id(self) -> str:
         return self.get("ic-target-id", None)
 
     @property
-    def trigger(self):
+    def trigger(self) -> NameId:
         return NameId(self.get("ic-trigger-name", None), self.get("ic-trigger-id", None))
 
     @property
-    def prompt_value(self):
+    def prompt_value(self) -> str:
         return self.get("ic-prompt-value", None)
 
     def __repr__(self):
@@ -129,8 +76,15 @@ class IntercoolerQueryDict(QueryDict):
         return "<{cls!s}: {attrs!s}>".format(cls=self.__class__.__name__, attrs=", ".join(attrs))
 
 
-def intercooler_data(self):
-    if not hasattr(self, "_processed_intercooler_data"):
+@contextmanager
+def _mutate_querydict(qd):
+    qd._mutable = True
+    yield qd
+    qd._mutable = False
+
+
+def intercooler_data(request: HttpRequest) -> IntercoolerQueryDict:
+    if not hasattr(request, "_processed_intercooler_data"):
         IC_KEYS = [
             "ic-current-url",
             "ic-element-id",
@@ -142,11 +96,12 @@ def intercooler_data(self):
             "ic-trigger-name",
             "ic-request",
         ]
-        ic_qd = IntercoolerQueryDict("", encoding=self.encoding)
-        if self.method in ("GET", "HEAD", "OPTIONS"):
-            query_params = self.GET
+        ic_qd = IntercoolerQueryDict("", encoding=request.encoding)
+        if request.method in ("GET", "HEAD", "OPTIONS"):
+            query_params = request.GET
         else:
-            query_params = self.POST
+            query_params = request.POST
+
         query_keys = tuple(query_params.keys())
         for ic_key in IC_KEYS:
             if ic_key in query_keys:
@@ -160,30 +115,51 @@ def intercooler_data(self):
                         removed = []
                 with _mutate_querydict(ic_qd) as IC_DATA:
                     IC_DATA.update({ic_key: removed})
+
         # Don't pop these ones off, so that decisions can be made for
         # handling _method
         ic_request = query_params.get("_method")
         with _mutate_querydict(ic_qd) as IC_DATA:
             IC_DATA.update({"_method": ic_request})
+
         # If HttpMethodOverride is in the middleware stack, this may
         # return True.
-        IC_DATA.changed_method = getattr(self, "changed_method", False)
-        self._processed_intercooler_data = ic_qd
-    return self._processed_intercooler_data
+        IC_DATA.changed_method = getattr(request, "changed_method", False)
+        request._processed_intercooler_data = ic_qd
+
+    return request._processed_intercooler_data
 
 
-class IntercoolerData(MiddlewareMixin):
-    def process_request(self, request):
-        request.maybe_intercooler = _maybe_intercooler.__get__(request)
-        request.is_intercooler = _is_intercooler.__get__(request)
-        request.intercooler_data = SimpleLazyObject(intercooler_data.__get__(request))
+def _maybe_intercooler(self: HttpRequest) -> bool:
+    return self.META.get("HTTP_X_IC_REQUEST") == "true"
 
 
-class IntercoolerRedirector(MiddlewareMixin):
-    def process_response(self, request, response):
+def _is_intercooler(self: HttpRequest) -> bool:
+    return self.is_ajax() and self.maybe_intercooler()
+
+
+class MiddlewareHelper:
+    def __init__(self, get_response: Callable[..., HttpResponse]):
+        self.get_response = get_response
+
+
+class IntercoolerData(MiddlewareHelper):
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        # dynamically attach the methods/data to the request instance
+        request.maybe_intercooler = MethodType(_maybe_intercooler, request)
+        request.is_intercooler = MethodType(_is_intercooler, request)
+        request.intercooler_data = SimpleLazyObject(lambda: intercooler_data(request))
+
+        return self.get_response(request)
+
+
+class IntercoolerRedirector(MiddlewareHelper):
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        response = self.get_response(request)
         if not request.is_intercooler():
             return response
-        if response.status_code > 300 and response.status_code < 400:
+
+        if 300 <= response.status_code < 400:
             if response.has_header("Location"):
                 url = response["Location"]
                 del response["Location"]
@@ -192,4 +168,5 @@ class IntercoolerRedirector(MiddlewareMixin):
                     new_resp[k] = v
                 new_resp["X-IC-Redirect"] = url
                 return new_resp
+
         return response

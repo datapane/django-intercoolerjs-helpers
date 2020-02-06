@@ -12,4 +12,6 @@ __pycache__
 .*.sw?
 .*~
 /.venv
+/.idea
+/pip-wheel-metadata
 
