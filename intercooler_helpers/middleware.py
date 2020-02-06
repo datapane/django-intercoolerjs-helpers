@@ -5,20 +5,23 @@ from collections import namedtuple
 from contextlib import contextmanager
 
 from django.http import QueryDict, HttpResponse
+
 try:
     from django.urls import Resolver404, resolve
 except ImportError:  # Django <1.10
     from django.core.urlresolvers import Resolver404, resolve
 from django.utils.functional import SimpleLazyObject
 from django.utils.six.moves.urllib.parse import urlparse
+
 try:
     from django.utils.deprecation import MiddlewareMixin
 except ImportError:  # < Django 1.10
+
     class MiddlewareMixin(object):
         pass
 
 
-__all__ = ['IntercoolerData', 'HttpMethodOverride']
+__all__ = ["IntercoolerData", "HttpMethodOverride"]
 
 
 class HttpMethodOverride(MiddlewareMixin):
@@ -30,14 +33,17 @@ class HttpMethodOverride(MiddlewareMixin):
     with support for newer Django (ie: implements MiddlewareMixin), without
     dropping older versions, I could possibly replace this with that.
     """
+
     def process_request(self, request):
         request.changed_method = False
-        if request.method != 'POST':
+        if request.method != "POST":
             return
-        methods = {'GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'}
-        potentials = ((request.META, 'HTTP_X_HTTP_METHOD_OVERRIDE'),
-                      (request.GET, '_method'),
-                      (request.POST, '_method'))
+        methods = {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
+        potentials = (
+            (request.META, "HTTP_X_HTTP_METHOD_OVERRIDE"),
+            (request.GET, "_method"),
+            (request.POST, "_method"),
+        )
         for querydict, key in potentials:
             if key in querydict and querydict[key].upper() in methods:
                 newmethod = querydict[key].upper()
@@ -46,7 +52,7 @@ class HttpMethodOverride(MiddlewareMixin):
                 if newmethod == request.method:
                     return
                 request.original_method = request.method
-                if hasattr(querydict, '_mutable'):
+                if hasattr(querydict, "_mutable"):
                     with _mutate_querydict(querydict):
                         querydict.pop(key)
                 if not hasattr(request, newmethod):
@@ -57,7 +63,7 @@ class HttpMethodOverride(MiddlewareMixin):
 
 
 def _maybe_intercooler(self):
-    return self.META.get('HTTP_X_IC_REQUEST') == 'true'
+    return self.META.get("HTTP_X_IC_REQUEST") == "true"
 
 
 def _is_intercooler(self):
@@ -71,14 +77,14 @@ def _mutate_querydict(qd):
     qd._mutable = False
 
 
-NameId = namedtuple('NameId', 'name id')
-UrlMatch = namedtuple('UrlMatch', 'url match')
+NameId = namedtuple("NameId", "name id")
+UrlMatch = namedtuple("UrlMatch", "url match")
 
 
 class IntercoolerQueryDict(QueryDict):
     @property
     def url(self):
-        url = self.get('ic-current-url', None)
+        url = self.get("ic-current-url", None)
         match = None
         if url is not None:
             url = url.strip()
@@ -94,45 +100,50 @@ class IntercoolerQueryDict(QueryDict):
 
     @property
     def element(self):
-        return NameId(self.get('ic-element-name', None), self.get('ic-element-id', None))
+        return NameId(self.get("ic-element-name", None), self.get("ic-element-id", None))
 
     @property
     def id(self):
         # I know IC calls it a UUID internally, buts its just 1, incrementing.
-        return int(self.get('ic-id', '0'))
+        return int(self.get("ic-id", "0"))
 
     @property
     def request(self):
-        return bool(self.get('ic-request', None))
+        return bool(self.get("ic-request", None))
 
     @property
     def target_id(self):
-        return self.get('ic-target-id', None)
+        return self.get("ic-target-id", None)
 
     @property
     def trigger(self):
-        return NameId(self.get('ic-trigger-name', None), self.get('ic-trigger-id', None))
+        return NameId(self.get("ic-trigger-name", None), self.get("ic-trigger-id", None))
 
     @property
     def prompt_value(self):
-        return self.get('ic-prompt-value', None)
+        return self.get("ic-prompt-value", None)
 
     def __repr__(self):
-        props = ('id', 'request', 'target_id', 'element', 'trigger',
-                 'prompt_value', 'url')
-        attrs = ['{name!s}={val!r}'.format(name=prop, val=getattr(self, prop))
-                 for prop in props]
-        return "<{cls!s}: {attrs!s}>".format(cls=self.__class__.__name__,
-                                             attrs=", ".join(attrs))
+        props = ("id", "request", "target_id", "element", "trigger", "prompt_value", "url")
+        attrs = ["{name!s}={val!r}".format(name=prop, val=getattr(self, prop)) for prop in props]
+        return "<{cls!s}: {attrs!s}>".format(cls=self.__class__.__name__, attrs=", ".join(attrs))
 
 
 def intercooler_data(self):
-    if not hasattr(self, '_processed_intercooler_data'):
-        IC_KEYS = ['ic-current-url', 'ic-element-id', 'ic-element-name',
-                   'ic-id', 'ic-prompt-value', 'ic-target-id',
-                   'ic-trigger-id', 'ic-trigger-name', 'ic-request']
-        ic_qd = IntercoolerQueryDict('', encoding=self.encoding)
-        if self.method in ('GET', 'HEAD', 'OPTIONS'):
+    if not hasattr(self, "_processed_intercooler_data"):
+        IC_KEYS = [
+            "ic-current-url",
+            "ic-element-id",
+            "ic-element-name",
+            "ic-id",
+            "ic-prompt-value",
+            "ic-target-id",
+            "ic-trigger-id",
+            "ic-trigger-name",
+            "ic-request",
+        ]
+        ic_qd = IntercoolerQueryDict("", encoding=self.encoding)
+        if self.method in ("GET", "HEAD", "OPTIONS"):
             query_params = self.GET
         else:
             query_params = self.POST
@@ -151,12 +162,12 @@ def intercooler_data(self):
                     IC_DATA.update({ic_key: removed})
         # Don't pop these ones off, so that decisions can be made for
         # handling _method
-        ic_request = query_params.get('_method')
+        ic_request = query_params.get("_method")
         with _mutate_querydict(ic_qd) as IC_DATA:
-            IC_DATA.update({'_method': ic_request})
+            IC_DATA.update({"_method": ic_request})
         # If HttpMethodOverride is in the middleware stack, this may
         # return True.
-        IC_DATA.changed_method = getattr(self, 'changed_method', False)
+        IC_DATA.changed_method = getattr(self, "changed_method", False)
         self._processed_intercooler_data = ic_qd
     return self._processed_intercooler_data
 
@@ -168,18 +179,17 @@ class IntercoolerData(MiddlewareMixin):
         request.intercooler_data = SimpleLazyObject(intercooler_data.__get__(request))
 
 
-
 class IntercoolerRedirector(MiddlewareMixin):
     def process_response(self, request, response):
         if not request.is_intercooler():
             return response
         if response.status_code > 300 and response.status_code < 400:
-            if response.has_header('Location'):
-                url = response['Location']
-                del response['Location']
+            if response.has_header("Location"):
+                url = response["Location"]
+                del response["Location"]
                 new_resp = HttpResponse()
                 for k, v in response.items():
                     new_resp[k] = v
-                new_resp['X-IC-Redirect'] = url
+                new_resp["X-IC-Redirect"] = url
                 return new_resp
         return response

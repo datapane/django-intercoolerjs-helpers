@@ -9,6 +9,7 @@ from django.http import HttpResponse, Http404
 from django.shortcuts import redirect
 from django.template.defaultfilters import pluralize
 from django.template.response import TemplateResponse
+
 try:
     from django.urls import reverse
 except ImportError:  # Django <1.10
@@ -21,18 +22,23 @@ def _page_data():
 
 clicktrack = 0
 
+
 def click(request):
     global clicktrack
     clicktrack += 1
-    do_reset = (request.is_intercooler() and
-                request.intercooler_data.element.id == 'intro-btn2' and
-                request.intercooler_data.current_url.match is not None)
+    do_reset = (
+        request.is_intercooler()
+        and request.intercooler_data.element.id == "intro-btn2"
+        and request.intercooler_data.current_url.match is not None
+    )
     if do_reset:
         clicktrack = 0
     time = pluralize(clicktrack)
     text = "<span>You clicked me {} time{}...</span>".format(clicktrack, time)
     if do_reset:
-        text = "<span>You reset the counter!, via {}</span>".format(request.intercooler_data.trigger.id)
+        text = "<span>You reset the counter!, via {}</span>".format(
+            request.intercooler_data.trigger.id
+        )
     if not request.is_intercooler():
         raise Http404("Not allowed to come here outside of an Intercooler.js request!")
     resp = HttpResponse(text)
@@ -40,7 +46,7 @@ def click(request):
 
 
 def redirector(request):
-    return redirect(reverse('redirected'))
+    return redirect(reverse("redirected"))
 
 
 def redirected(request):
@@ -56,21 +62,20 @@ def form(request):
     template = "form.html"
     _form = TestForm(request.POST or None)
     if _form.is_valid():
-        return redirect(reverse('redirected'))
-    context = {'form': _form}
+        return redirect(reverse("redirected"))
+    context = {"form": _form}
     return TemplateResponse(request, template=template, context=context)
-
 
 
 def polling_stop(request):
     resp = HttpResponse("Cancelled")
-    resp['X-IC-CancelPolling'] = "true"
+    resp["X-IC-CancelPolling"] = "true"
     return resp
 
 
 def polling_start(request):
     resp = HttpResponse("")
-    resp['X-IC-ResumePolling'] = "true"
+    resp["X-IC-ResumePolling"] = "true"
     return resp
 
 
@@ -79,7 +84,7 @@ def polling(request):
     if request.is_intercooler():
         template = "polling_response.html"
     context = {
-        'item': str(uuid4()),
+        "item": str(uuid4()),
     }
     return TemplateResponse(request, template=template, context=context)
 
@@ -89,29 +94,25 @@ def infinite_scrolling(request):
     if request.is_intercooler():
         template = "infinite_scrolling_include.html"
     context = {
-        'rows': _page_data(),
+        "rows": _page_data(),
     }
     return TemplateResponse(request, template=template, context=context)
 
 
 def root(request):
     template = "demo_project.html"
-    context = {
-        'rows': _page_data(),
-        'form': TestForm()
-    }
+    context = {"rows": _page_data(), "form": TestForm()}
     return TemplateResponse(request, template=template, context=context)
 
 
 urlpatterns = [
-    url('^form/$', form, name='form'),
-    url('^redirector/redirected/$', redirected, name='redirected'),
-    url('^redirector/$', redirector, name='redirector'),
-    url('^click/$', click, name='click'),
-    url('^polling/stop/$', polling_stop, name='polling_stop'),
-    url('^polling/start/$', polling_start, name='polling_start'),
-    url('^polling/$', polling, name='polling'),
-    url('^infinite/scrolling/$', infinite_scrolling, name='infinite_scrolling'),
-    url('^$', root, name='root'),
+    url("^form/$", form, name="form"),
+    url("^redirector/redirected/$", redirected, name="redirected"),
+    url("^redirector/$", redirector, name="redirector"),
+    url("^click/$", click, name="click"),
+    url("^polling/stop/$", polling_stop, name="polling_stop"),
+    url("^polling/start/$", polling_start, name="polling_start"),
+    url("^polling/$", polling, name="polling"),
+    url("^infinite/scrolling/$", infinite_scrolling, name="infinite_scrolling"),
+    url("^$", root, name="root"),
 ]
-

@@ -1,0 +1,56 @@
+[tool.poetry]
+name = "django-intercoolerjs-helpers"
+version = "0.3.0"
+description = "A small reusable app for Django which provides a few improvements for working with Intercooler.js"
+authors = [
+    "Keryn Knight <django-intercooler_helpers@kerynknight.com>",
+    "Hai Lang <hailangvn@gmail.com>",
+    "Mandeep Gill <mandeep@datapane.com>"
+]
+repository = "https://www.github/datapane/django-intercoolerjs-helpers"
+license = "BSD-2-Clause"
+keywords = ["django", "intercooler", "intercoolerjs"]
+classifiers=[
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Framework :: Django",
+    "Framework :: Django :: 2.1",
+    "Framework :: Django :: 2.2",
+    "Framework :: Django :: 3.0",
+]
+
+packages = [
+    { include = "intercooler_helpers" },
+    # { include = "test_templates" },
+]
+# extra files
+include = ["LICENSE", "README.rst", "tox.ini", "Makefile", ".coveragerc", "CHANGELOG"]
+
+[tool.poetry.dependencies]
+python = "^3.6.0"
+Django = "^3.0.3"
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.3.5"
+pytest-cov = "^2.8.1"
+black = {version = "^19.10b0", allow-prereleases = true}
+check-manifest = "^0.40"
+
+[tool.black]
+line-length = 100
+target-version = ["py37"]
+
+[tool.check-manifest]
+ignore = [
+    ".travis.yml",".bumpversion.cfg",".idea",".tox","__pycache__","bin",
+    "include","lib","local","share",".Python","htmlcov"
+    ]
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"
+
